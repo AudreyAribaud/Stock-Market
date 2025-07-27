@@ -1,0 +1,551 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © sacha
+
+//@version=6
+indicator("Buy & Sell", overlay = true)
+
+//------------------------------------------------------------------
+// Fetch higher tiemframe values
+Stock_15M_Open = request.security(syminfo.tickerid, "15", open)
+Stock_30M_Open = request.security(syminfo.tickerid, "30", open)
+Stock_1D_Open = request.security(syminfo.tickerid, "D", open)
+
+Stock_15M_Close = request.security(syminfo.tickerid, "15", close)
+Stock_30M_Close = request.security(syminfo.tickerid, "30", close)
+Stock_1D_Close = request.security(syminfo.tickerid, "D", close)
+
+Stock_15M_High = request.security(syminfo.tickerid, "15", high)
+Stock_30M_High = request.security(syminfo.tickerid, "30", high)
+Stock_1D_High = request.security(syminfo.tickerid, "D", high)
+
+Stock_15M_Low = request.security(syminfo.tickerid, "15", low)
+Stock_30M_Low = request.security(syminfo.tickerid, "30", low)
+Stock_1D_Low = request.security(syminfo.tickerid, "D", low)
+
+Stock_15M_Volume = request.security(syminfo.tickerid, "15", volume)
+Stock_30M_Volume = request.security(syminfo.tickerid, "30", volume)
+Stock_1D_Volume = request.security(syminfo.tickerid, "D", volume)
+//--------------------
+
+//------------------------------------------------------------------
+// Relative LODs & HODs positions
+HOD = request.security(syminfo.tickerid, "D", high)
+LOD = request.security(syminfo.tickerid, "D", low)
+HOD_1 = request.security(syminfo.tickerid, "D", high[1])
+LOD_1 = request.security(syminfo.tickerid, "D", low[1])
+
+is_above_HOD = close > HOD 
+is_below_HOD = close < HOD
+is_above_LOD = close > LOD
+is_below_LOD = close < LOD
+is_above_HOD_1 = close > HOD[1]
+is_below_HOD_1 = close < HOD[1]
+is_above_LOD_1 = close > LOD[1]
+is_below_LOD_1 = close < LOD[1]
+
+Lower_HOD = HOD < HOD[1]
+Higher_LOD = LOD > LOD[1]
+//--------------------
+
+
+//------------------------------------------------------------------
+//------------------------------------------------------------------
+// Targets & Size
+    
+    //Input variables
+Initial_Capital = input.float(10000, title = "Capital", group = "Account", step = 100)
+Leverage = input.float(1, title = "Leverage", group = "Account", step = 1)
+Allocated_Capital_per_Trade = input.float(25, title = "Allocated capital per trade (%)", group = "Account", step = 1)
+
+Monthly_Goal = input.float(1100, title = "Monthly goal ($)", group = "Performance", step = 50)
+Trades_Per_Month = input.float(50, title = "Trades per month", group = "Performance", step = 1)
+Winrate = input.float(70, title = "Winrate (%)", group = "Performance", step = 1)
+
+Absolute_Profit = input.float(60, title = "Absolute profit target ($)", group = "Targets", step = 1)
+Return_Percent = input.float(1, title = "Return per trade on allocated capital (%)", group = "Targets", step = 0.1) / 100
+Risk_Percent = input.float(1, title = "Risk per trade on allocated capital (%)", group = "Targets", step = 0.1) / 100
+
+
+    // Calculated variables
+Available_Capital = (Initial_Capital * Leverage) * (Allocated_Capital_per_Trade / 100)
+Strat_Max_Loss = (Absolute_Profit - ((Monthly_Goal / Trades_Per_Month) * (Winrate / 100)))*((Winrate / 100) / (1 - (Winrate / 100)))
+
+    // Calculation of profit target
+Profit_Target_Absolute = close + ((close / Available_Capital) * Absolute_Profit)
+Profit_Target_Relative = close * (1 + Return_Percent)
+
+    // Caclulation of loss exit
+Max_Loss = close - ((close / Available_Capital) * Strat_Max_Loss)
+Loss_Target_Relative = close * (1 - Risk_Percent)
+
+    // Calculation of trade size
+Size = Available_Capital / close
+
+    // Plot
+// plot(Profit_Target_Absolute, "Full sized profit target", linewidth = 3, color = #4caf4fb1, offset = 2, show_last = 1)
+// plot(Profit_Target_Absolute, "Full sized profit target", linewidth = 3, color = #4caf4fb1, offset = 3, show_last = 1)
+// plot(Profit_Target_Absolute, "Full sized profit target", linewidth = 3, color = #4caf4fb1, offset = 4, show_last = 1)
+
+// plot(Max_Loss, "Full sized max loss", linewidth = 3, color = color.rgb(255, 82, 209, 20), offset = 2, show_last = 1)
+// plot(Max_Loss, "Full sized max loss", linewidth = 3, color = color.rgb(255, 82, 209, 20), offset = 3, show_last = 1)
+// plot(Max_Loss, "Full sized max loss", linewidth = 3, color = color.rgb(255, 82, 209, 20), offset = 4, show_last = 1)
+
+plot(Profit_Target_Relative, "Full sized profit target", linewidth = 3, color = #4caf4fb1, offset = 2, show_last = 1)
+plot(Profit_Target_Relative, "Full sized profit target", linewidth = 3, color = #4caf4fb1, offset = 3, show_last = 1)
+plot(Profit_Target_Relative, "Full sized profit target", linewidth = 3, color = #4caf4fb1, offset = 4, show_last = 1)
+
+plot(Loss_Target_Relative, "Full sized max loss", linewidth = 3, color = color.rgb(255, 82, 209, 20), offset = 2, show_last = 1)
+plot(Loss_Target_Relative, "Full sized max loss", linewidth = 3, color = color.rgb(255, 82, 209, 20), offset = 3, show_last = 1)
+plot(Loss_Target_Relative, "Full sized max loss", linewidth = 3, color = color.rgb(255, 82, 209, 20), offset = 4, show_last = 1)
+
+Size_Table = table.new(position=position.top_right, columns=2, rows=2)
+table.cell(Size_Table, column=0, row=1, text= "Size :", text_color= #000000, bgcolor = #2db6dc, text_size = size.normal)
+table.cell(Size_Table, column=1, row=1, text = str.tostring(math.round(Size)), text_color= #000000, bgcolor = #2db6dc, text_size = size.normal)
+//------------------------------------------------------------------
+
+//------------------------------------------------------------------
+// ATR display
+    // Number of bars since the session's open
+session_open = request.security(syminfo.tickerid, "D", open)
+bars_since_open = ta.barssince(dayofweek != dayofweek[1])
+
+    // Daily average true range anchored at today's session's open
+atr_daily = request.security(syminfo.tickerid, "D", ta.atr(14))
+atr_up = open[bars_since_open] + atr_daily
+atr_down = open[bars_since_open] - atr_daily
+
+    // Plot
+// plot_up = plot(atr_up, color = #363a4500, offset = 0)
+// plot_down = plot(atr_down, color = #363a4500, offset = 0)
+// fill(plot_up, plot_down, #c520d426)
+
+//------------------------------------------------------------------
+// Check if current bar is less than 30 minutes after session open
+// is_30_min_check = input.bool(true, 'Exclude first 30 min', "", group = "Global" )
+is_X_min_check = input.int(30, "Exclude first X minutes", maxval = 30, step = 1, tooltip = "", group = "Global")
+
+// is_30_min = is_30_min_check ? session.ismarket and timeframe.isintraday and hour(time) == 9 and minute(time) <= 59 : false
+is_30_min = is_X_min_check == 0 ? false : (session.ismarket and timeframe.isintraday and hour(time) == 9 and minute(time) <= (30 + is_X_min_check - 1))
+
+
+
+//------------------------------------------------------------------
+// Keybars
+//--------------------
+// User-defined settings
+atrLength = input.int(390, title = "ATR Length", minval = 1, group = "Keybars - inputs")
+atrMultiplier = input.float(1, title = "ATR Multiplier", minval = 0.1, group = "Keybars - inputs")
+volumeLength = input.int(390, title = "Volume Average Length", minval = 1, group = "Keybars - inputs")
+bodySizePercentage = input.float(75, title = "Minimum Body Size %", minval = 0, maxval = 100, group = "Keybars - inputs")
+
+// Calculating ATR, Volume Average, and Candle Body Size
+atr = ta.atr(atrLength)
+volumeAvg = ta.sma(volume, volumeLength)
+bodySize = math.abs(close - open)  // Size of the candle body
+totalRange = high - low  // Total range from high to low
+
+// Redefining barRange to represent the size of the candle body
+barRange = bodySize
+
+// Key Bar Condition: Compare the body size (barRange) with the ATR
+is_keybar = (barRange >= atrMultiplier * atr) and ((bodySize / totalRange) >= (bodySizePercentage / 100)) and (volume > volumeAvg)
+
+// Determining Bullish or Bearish Key Bar
+bullish_keybar = is_keybar and close > open
+bearish_keybar = is_keybar and close < open
+
+// Fetch the last keybars
+var since_last_bullish_keybar = float(na)
+var since_last_bearish_keybar = float(na)
+since_last_bullish_keybar := ta.barssince(bullish_keybar)
+since_last_bearish_keybar := ta.barssince(bearish_keybar)
+//--------------------
+
+//------------------------------------------------------------------
+// Heinkin_Ashi candles
+//--------------------
+// Calculate HA values
+ha_close = (open + high + low + close) / 4
+ha_open = float(na)
+ha_open := na(ha_open[1]) ? (open + close) / 2 : (ha_open[1] + ha_close[1]) / 2
+ha_high = math.max(high, ha_open, ha_close)
+ha_low = math.min(low, ha_open, ha_close)
+
+// Detect HA candle color
+haGreen = (ha_close > ha_open)
+haRed = (ha_close < ha_open)
+standardGreen = (open < close)
+standardRed = (open > close)
+
+
+// Detect flat HA
+green_diff = math.abs(ha_low - ha_open)
+red_diff = math.abs(ha_high - ha_open)
+tolerance = 0.01 * syminfo.mintick
+
+is_flat_green = haGreen and green_diff <= tolerance
+is_flat_red = haRed and red_diff <= tolerance
+
+// Detect green and red strikes
+    // Price action is in a "green strike" when the last 3 consecutive HA candles of the same color were green
+    // Price action is in a "red strike" when the last 3 consecutive HA candles of the same color were red
+var bool Red_Strike = false
+var bool Green_Strike = false
+
+if (haGreen[1] and haGreen[2] and haGreen[3])
+    Green_Strike := true
+    Red_Strike := false
+else if (haRed[1] and haRed[2] and haRed[3])
+    Red_Strike := true
+    Green_Strike := false
+
+// Detect HA reversal pattern
+    // First flat green HA candle after a red strike
+bullishReversal = is_flat_green and Red_Strike and (not (is_flat_green[1] and Red_Strike[1])) and standardGreen
+
+    // First flat red HA candle after a green strike
+bearishReversal = is_flat_red and Green_Strike and (not (is_flat_red[1] and Green_Strike[1])) and standardRed
+
+    // Track the latest reversal triggered
+var latestSignal = float(na)
+latestSignal := bullishReversal ? 1 : bearishReversal ? -1 : latestSignal
+
+    // Count the number of bars since the last reversal
+var lastBullishReversal = float(na)
+var lastBearishReversal = float(na)
+lastBullishReversal := ta.barssince(bullishReversal)
+lastBearishReversal := ta.barssince(bearishReversal)
+//--------------------
+
+//------------------------------------------------------------------
+// Real Relative Strength & Weakness indicator
+//--------------------
+// Price change (PC) and ATR length inputs
+PC_Input = input(12, "Price change length", group = "RRS - inputs")
+ATRLength_Input = input(12, "ATR Length", group = "RRS - inputs")
+
+// Define a function to calculate the Power Index
+calcPowerIndex(pc_len, atr_len) =>
+    pc = close - close[pc_len]
+    atr_val = ta.atr(atr_len)
+    pc / atr_val
+
+// Fetch the same calculation from other timeframes
+Stock_PI_5M = request.security(syminfo.tickerid, "", calcPowerIndex(PC_Input, ATRLength_Input))
+Stock_PI_15M = request.security(syminfo.tickerid, "15", calcPowerIndex(PC_Input, ATRLength_Input))
+Stock_PI_30M = request.security(syminfo.tickerid, "30", calcPowerIndex(PC_Input, ATRLength_Input))
+Stock_PI_1D = request.security(syminfo.tickerid, "D", calcPowerIndex(PC_Input, ATRLength_Input))
+
+SPY_PI_5M = request.security("SPY", "", calcPowerIndex(PC_Input, ATRLength_Input))
+SPY_PI_15M = request.security("SPY", "15", calcPowerIndex(PC_Input, ATRLength_Input))
+SPY_PI_30M = request.security("SPY", "30", calcPowerIndex(PC_Input, ATRLength_Input))
+SPY_PI_1D = request.security("SPY", "D", calcPowerIndex(PC_Input, ATRLength_Input))
+
+// Calculate real relative strength
+RRS_5M = Stock_PI_5M - SPY_PI_5M
+RRS_15M = Stock_PI_15M - SPY_PI_15M
+RRS_30M = Stock_PI_30M - SPY_PI_30M
+RRS_1D = Stock_PI_1D - SPY_PI_1D
+
+// Detect RRS sign changes
+// RRS_5M_Crossover = ta.crossover(RRS_5M, 0)
+// RRS_5M_Crossunder = ta.crossunder(RRS_5M, 0)
+// RRS_15M_Crossover = ta.crossover(RRS_15M, 0)
+// RRS_15M_Crossunder = ta.crossunder(RRS_15M, 0)
+// RRS_30M_Crossover = ta.crossover(RRS_30M, 0)
+// RRS_30M_Crossunder = ta.crossunder(RRS_30M, 0)
+// RRS_1D_Crossover = ta.crossover(RRS_1D, 0)
+// RRS_1D_Crossunder = ta.crossunder(RRS_1D, 0)
+//--------------------
+
+//------------------------------------------------------------------
+// VWAP
+//--------------------
+// Relative to today's intraday VWAP
+vwap = request.security(syminfo.tickerid, timeframe.period, ta.vwap)
+is_above_vwap = close > vwap
+is_below_vwap = close < vwap
+
+vwap_15 = request.security(syminfo.tickerid, "15", ta.vwap)
+is_above_vwap_15 = Stock_15M_Close > vwap_15
+is_below_vwap_15 = Stock_15M_Close < vwap_15
+
+vwap_30 = request.security(syminfo.tickerid, "30", ta.vwap)
+is_above_vwap_30 = Stock_30M_Close > vwap_30
+is_below_vwap_30 = Stock_30M_Close < vwap_30
+
+// Get yesterday's averaged VWAP
+    // For a more advanced session-aware approach:
+is_new_day = dayofweek != dayofweek[1]
+is_market_hours = session.ismarket  // Only during regular market hours
+
+    // Reset VWAP calculation at the beginning of each day
+var float daily_vwap = na
+if is_new_day and is_market_hours
+    daily_vwap := ta.vwap(close)
+else if is_market_hours
+    daily_vwap := ta.vwap(close)
+
+    // Get yesterday's final VWAP value
+yesterdays_final_vwap = request.security(syminfo.tickerid, "D", daily_vwap, gaps=barmerge.gaps_off)[1]
+
+    // Plot VWAP
+plot(vwap, "VWAP", #117914, linewidth = 2, force_overlay = true)
+//--------------------
+
+//------------------------------------------------------------------
+// Relative volume (from CivilCucumber)
+days = input.int(5, minval=1, title="N Day Average", group = "Relative volume")
+highRVolThres = input.float(1.5, minval=0.0, step=0.1, title="RVol Highlight Thres.", group = "Relative volume")
+cautionRVolThres = input.float(1.2, minval=1.0, step=0.1, title="RVol Soft Highlight Thres.", group = "Relative volume")
+// colorPrevClose = input.bool(false, title="Color based on previous close")
+
+var cVol = 0.0
+var newDayBars = array.new_int()
+
+// detect new session of day
+isNewDay() =>
+    t = time('D') // by default, time() follows symbol's session
+    na(t[1]) and not na(t) or t[1] < t
+
+if isNewDay()
+    // reset cumulative volume
+    cVol := 0
+    
+    // save new bars in circular array of length days + 1
+    array.push(newDayBars, bar_index)
+    if (array.size(newDayBars) > days + 1)
+        array.shift(newDayBars)
+    
+    if timeframe.isintraday
+        // mark new sessions on intraday charts
+        line.new(bar_index, 0, bar_index, 0, extend=extend.left, color=color.gray, style=line.style_dotted)
+
+// session start time, which is at regular intervals
+timeSessionStart = time('D')
+
+// cumulative volume
+cVol := cVol + volume
+
+// calculate relative volume
+relativeVolume(cumVol) =>
+    aVol = 0.0
+    // check enough days saved in history to run (current day also saved)
+    len = array.size(newDayBars)
+    if len >= days + 1
+        // SMA of historical cumulative volume up to but not including current time of day
+        for i = 0 to len - 2
+            b1 = array.get(newDayBars, i)
+            b2 = array.get(newDayBars, i + 1)
+            
+            // use historical date but carry over current hour, minutes, seconds (this method is exact and avoids DST bugs)
+            daysBetweenSessions = math.round((timeSessionStart - timeSessionStart[bar_index - b1]) / (24 * 60 * 60 * 1000))
+            tLookup = timestamp(year(time), month(time), dayofmonth(time) - daysBetweenSessions, hour(time), minute(time), second(time))
+            
+            // get latest bar clamped in range [b1, b2) that is equal to or precedes given time (binary search for speed)
+            int lo = math.max(0, b1) - 1
+            int hi = math.max(0, b2)
+            while 1 + lo < hi
+                int mi = lo + math.floor((hi - lo) / 2)
+                if (tLookup < time[bar_index - mi])
+                    hi := mi
+                else
+                    lo := mi
+            lo := lo < b1 ? hi : lo
+            bClosest = b1 < b2 ? lo : -1
+            
+            // add cumulative volume to SMA calculation
+            tClosest = time[bar_index - bClosest]
+            aVol := aVol + (tLookup >= tClosest ? cumVol[bar_index - bClosest] / days : 0)
+    aVol > 0 ? cumVol / aVol : na
+
+rVol = relativeVolume(cVol)
+//--------------------
+
+//------------------------------------------------------------------ 
+// ATR trailing stop
+//--------------------
+
+// Inputs
+nATRPeriod = 12
+nATRMultip = 3.5
+
+// Calculate ATR
+xATR = ta.atr(nATRPeriod)
+nLoss = nATRMultip * xATR
+
+// Trailing Stop Calculation
+var float xATRTrailingStop = na
+
+xATRTrailingStop := close > nz(xATRTrailingStop[1], 0) and close[1] > nz(xATRTrailingStop[1], 0) ? 
+     math.max(nz(xATRTrailingStop[1]), close - nLoss) : 
+     close < nz(xATRTrailingStop[1], 0) and close[1] < nz(xATRTrailingStop[1], 0) ? 
+     math.min(nz(xATRTrailingStop[1]), close + nLoss) : 
+     close > nz(xATRTrailingStop[1], 0) ? 
+     close - nLoss : 
+     close + nLoss
+
+// Position Tracking
+var int pos = na
+pos := close[1] < nz(xATRTrailingStop[1], 0) and close > nz(xATRTrailingStop[1], 0) ? 1 : close[1] > nz(xATRTrailingStop[1], 0) and close < nz(xATRTrailingStop[1], 0) ? -1 : nz(pos[1], 0)
+
+// Color Selection
+color = pos == -1 ? #d10101 : pos == 1 ? #21cd27 : color.blue
+
+// Plotting
+plot(xATRTrailingStop, color = color, linewidth = 1, title="ATR Trailing Stop")
+
+
+
+//--------------------
+
+
+//------------------------------------------------------------------ 
+// Buying and Selling signals
+//--------------------
+
+
+//--------------------
+// Signal calculation logic
+//--------------------
+// Definition of sub-triggers
+volume_sma_check = input.int(78, "Volume check - SMA length", step = 1, group = "Global")
+
+// Enforced_RRS = input.bool(true,"D1 relative strength filter", "", group = "Signal checklist - Long")
+// Enforced_RRW = input.bool(true,"D1 relative weakness filter", "", group = "Signal checklist - Short")
+aligned_intraday_RS_check = input.bool(true,"Aligned relative strength filter", "", group = "Signal checklist - Long")
+aligned_intraday_RW_check = input.bool(true,"Aligned relative weakness filter", "", group = "Signal checklist - Short")
+// RRS_5M_Crossover_check = input.bool(true,"RRS 5m crossover 0", "", group = "Signal checklist - Long")
+// RRS_5M_Crossunder_check = input.bool(true,"RRS 5m crossunder 0", "", group = "Signal checklist - Short")
+// RRS_15M_Crossover_check = input.bool(true,"RRS 15m crossover 0", "", group = "Signal checklist - Long")
+// RRS_15M_Crossunder_check = input.bool(true,"RRS 15m crossunder 0", "", group = "Signal checklist - Short")
+RRS_30M_Crossover_check = input.bool(true,"RRS 30m crossover 0", "", group = "Signal checklist - Long")
+RRS_30M_Crossunder_check = input.bool(true,"RRS 30m crossunder 0", "", group = "Signal checklist - Short")
+
+// breakout_vwap_check = input.bool(true, "VWAP breakout", "", group = "Signal checklist - Long")
+// breakdown_vwap_check = input.bool(true, "VWAP breakdown", "", group = "Signal checklist - Short")
+keybar_breakout_vwap_check = input.bool(true, "Keybar VWAP breakout", "", group = "Signal checklist - Long")
+keybar_breakdown_vwap_check = input.bool(true, "Keybar VWAP breakdown", "", group = "Signal checklist - Short")
+
+red_to_green_strike_check = input.bool(true, "Red to green strike", "", group = "Signal checklist - Long")
+green_to_red_strike_check = input.bool(true, "Green to red strike", "", group = "Signal checklist - Short")
+
+HA_bullish_reversal_check = input.bool(true, "HA bullish reversal", "", group = "Signal checklist - Long")
+HA_bearish_reversal_check = input.bool(true, "HA bearish reversal", "", group = "Signal checklist - Short")
+
+bullish_thrust_check = input.bool(true, "Bullish thrust", "", group = "Signal checklist - Long")
+bearish_thrust_check = input.bool(true, "Bearish thrust", "", group = "Signal checklist - Short")
+
+atr_trailing_bullish_cross_check = input.bool(true, "ATR trailing stop bullish cross", "", group = "Signal checklist - Long")
+atr_trailing_bearish_cross_check = input.bool(true, "ATR trailing stop bearish cross", "", group = "Signal checklist - Short")
+
+HOD_1_breakout_check = input.bool(true, "Breakout of HOD[1]", "", group = "Signal checklist - Long")
+LOD_1_breakdown_check = input.bool(true, "Breakdown of LOD[1]", "", group = "Signal checklist - Short")
+
+
+// stable_D1_RS = Enforced_RRS ? (RRS_1D[1] > 0) and (RRS_1D[2] > 0) and (RRS_1D[3] > 0) : true
+// stable_D1_RW = Enforced_RRW ? (RRS_1D[1] < 0) and (RRS_1D[2] < 0) and (RRS_1D[3] < 0) : true
+
+// RRS_5M_Crossover = RRS_5M_Crossover_check ? ta.crossover(RRS_5M, 0) : false
+// RRS_5M_Crossunder = RRS_5M_Crossunder_check ? ta.crossunder(RRS_5M, 0) : false
+// RRS_15M_Crossover = RRS_15M_Crossover_check ? ta.crossover(RRS_15M, 0) : false
+// RRS_15M_Crossunder = RRS_15M_Crossunder_check ? ta.crossunder(RRS_15M, 0) : false
+RRS_30M_Crossover = RRS_30M_Crossover_check ? ta.crossover(RRS_30M, 0) : false
+RRS_30M_Crossunder = RRS_30M_Crossunder_check ? ta.crossunder(RRS_30M, 0) : false
+
+aligned_intraday_RS = aligned_intraday_RS_check ? ((RRS_15M > 0) and (RRS_5M > 0)) : true
+aligned_intraday_RW = aligned_intraday_RW_check ? ((RRS_15M < 0) and (RRS_5M < 0)) : true
+
+// breakout_vwap = breakdown_vwap_check ? (open < vwap) and (close > vwap) : false
+// breakdown_vwap = breakdown_vwap_check ? (open > vwap) and (close < vwap) : false
+
+keybar_breakout_vwap = keybar_breakout_vwap_check ? bullish_keybar and (open < vwap) and (close > vwap) : false
+keybar_breakdown_vwap = keybar_breakdown_vwap_check ? bearish_keybar and (open > vwap) and (close < vwap) : false
+
+HA_bullish_reversal = HA_bullish_reversal_check ? bullishReversal : false
+HA_bearish_reversal = HA_bearish_reversal_check ? bearishReversal : false
+red_to_green_strike = red_to_green_strike_check ? Red_Strike[1] and Green_Strike : false
+green_to_red_strike = green_to_red_strike_check ? Green_Strike[1] and Red_Strike : false
+
+volume_above_average = volume > ta.sma(volume, volume_sma_check)
+high_relative_volume = rVol >= 1.2
+
+is_long_bullish = (close > open) and (barRange >= 0.8 * ta.atr(12)) and (bodySize / totalRange >= 0.8)
+is_long_bearish = (close < open) and (barRange >= 0.8 * ta.atr(12)) and (bodySize / totalRange >= 0.8)
+bullish_thrust = bullish_thrust_check ? (is_long_bullish and is_long_bullish[1]) or (bullish_keybar and bullish_keybar[1]) : false
+bearish_thrust = bearish_thrust_check ? (is_long_bearish and is_long_bearish[1]) or (bearish_keybar and bearish_keybar[1]) : false
+
+atr_trailing_bullish_cross = atr_trailing_bullish_cross_check ? (pos[1] == -1 and pos == 1) : false
+atr_trailing_bearish_cross = atr_trailing_bearish_cross_check ? (pos[1] == 1 and pos == -1) : false
+
+HOD_1_breakout = is_long_bullish and (open < HOD_1) and (close > HOD_1)
+LOD_1_breakdown = is_long_bearish and (open > LOD_1) and (close < LOD_1)
+
+//--------------------
+// Enter Long Signal
+Enter_Long = aligned_intraday_RS and (volume_above_average or high_relative_volume) and (HA_bullish_reversal or keybar_breakout_vwap or red_to_green_strike or bullish_thrust or atr_trailing_bullish_cross or RRS_30M_Crossover or HOD_1_breakout)
+
+// Exit Long Signal
+Exit_Long = bearishReversal
+
+// Enter Short Signal
+Enter_Short = aligned_intraday_RW and (volume_above_average or high_relative_volume) and (HA_bearish_reversal or keybar_breakdown_vwap or green_to_red_strike or bearish_thrust or atr_trailing_bearish_cross or RRS_30M_Crossunder or LOD_1_breakdown)
+
+// Exit Short Signal
+Exit_Short = bullishReversal
+
+//--------------------
+// Logic to validate signals based on current position status
+
+// Position tracking variable
+var bool inPosition = false
+var bool isLong = false  // true if long, false if short
+
+// Initialize plotted signals (assuming these would be used with plotshape or similar)
+var bool validEnterLong = false
+var bool validExitLong = false  
+var bool validEnterShort = false
+var bool validExitShort = false
+
+below_long_entry = close < open[ta.barssince(validEnterLong) + 1]
+above_short_entry = close > open[ta.barssince(validEnterShort) + 1]
+
+validEnterLong := ((Enter_Long and not inPosition) or (Enter_Long and inPosition and not isLong)) and not is_30_min
+validExitLong := (Exit_Long or Enter_Short) and inPosition and isLong
+
+validEnterShort := ((Enter_Short and not inPosition) or (Enter_Short and inPosition and isLong)) and not is_30_min
+validExitShort := (Exit_Short or Enter_Long) and inPosition and not isLong
+
+// Position tracking logic
+if validEnterLong
+    inPosition := true
+    isLong := true
+    
+if validExitLong
+    inPosition := false
+    
+if validEnterShort
+    inPosition := true
+    isLong := false
+    
+if validExitShort
+    inPosition := false
+
+//--------------------
+
+
+//------------------------------------------------------------------
+// Plot Entry and Exit signals
+
+plotshape(validEnterLong, title = "Bullish Signal", style = shape.labelup, location = location.bottom, color = color.rgb(38, 175, 43, 28), size = size.tiny)
+plotshape(validEnterShort, title = "Bearish Signal", style = shape.labeldown, location = location.top, color = #c7333d, size = size.tiny)
+
+// plotchar(validExitLong, "Exit Long", "S", location.top, color.rgb(4, 134, 0), size = size.tiny)
+// plotchar(validExitShort, "Exit Short", "B", location.bottom, #8b006d, size = size.tiny)
+
+
+//------------------------------------------------------------------
+// Alerts
+
+alertcondition(validEnterLong, "Buy signal", "Buy signal on {{ticker}}")
+alertcondition(validEnterShort, "Sell signal", "Sell signal on {{ticker}}")
