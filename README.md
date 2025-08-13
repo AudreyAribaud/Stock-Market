@@ -1,10 +1,9 @@
 # Stock-Market
-Strategy and Backtest to trade on stock market
+Semi-automated strategy to trade on US stock market.
 
 Based on Sacha's strategy pinescript
 
-    - US Screen market
-    - Code strategy
-    - Backtest long strategy
-    - Backtest short strategy
-    - Robot trading
+This repo is organized into folders as follows :
+    - ressources --> data on which the strategy is based
+    - notebook --> notebook to test the code
+    - Streamlit --> files for the streamlit application
