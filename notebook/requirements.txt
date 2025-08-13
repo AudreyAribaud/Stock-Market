@@ -1,5 +1,8 @@
-pandas
-numpy
-matplotlib
-scikit-learn
+numpy==1.26.4
 tradingview-screener
+yfinance
+requests
+pandas
+pandas-ta
+matplotlib
+streamlit
