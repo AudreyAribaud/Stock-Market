@@ -6,3 +6,8 @@ pandas
 pandas-ta
 matplotlib
 streamlit
+plotly
+mplfinance
+ib_insync
+vectorbt
+scipy
