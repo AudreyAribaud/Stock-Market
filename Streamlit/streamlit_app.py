@@ -141,6 +141,7 @@ def plot_trades_and_equity(df, trades_df, equity, ticker):
         st.write(f"{ticker}: Aucun trade à afficher.")
         return
 
+    # Préparation des signaux d'achat/vente
     buys = pd.Series(np.nan, index=df.index)
     sells = pd.Series(np.nan, index=df.index)
     for _, r in trades_df.iterrows():
@@ -149,29 +150,36 @@ def plot_trades_and_equity(df, trades_df, equity, ticker):
         if r["exit_time"] in df.index:
             sells[r["exit_time"]] = df.at[r["exit_time"], "high"] * 1.005
 
-    apds = [
-        mpf.make_addplot(buys, type='scatter', marker='^', markersize=60, color='g'),
-        mpf.make_addplot(sells, type='scatter', marker='v', markersize=60, color='r')
-    ]
+    # Création des sous-colonnes pour afficher les deux graphiques côte à côte
+    col1, col2 = st.columns(2)
 
     # 🔹 Graphique chandeliers avec trades
-    mpf.plot(
-        df,
-        type='candle',
-        style='charles',
-        addplot=apds,
-        volume=False,
-        show_nontrading=False,
-        title=f"{ticker} – Trades exécutés"
-    )
+    with col1:
+        fig_candle, ax_candle = mpf.plot(
+            df,
+            type='candle',
+            style='charles',
+            addplot=[
+                mpf.make_addplot(buys, type='scatter', marker='^', markersize=60, color='g'),
+                mpf.make_addplot(sells, type='scatter', marker='v', markersize=60, color='r')
+            ],
+            volume=False,
+            show_nontrading=False,
+            returnfig=True,  # <- clé pour récupérer la figure matplotlib
+            figsize=(8, 4)
+        )
+        ax_candle[0].set_title(f"{ticker} – Chandeliers & Trades")
+        st.pyplot(fig_candle)
 
     # 🔹 Graphique de la courbe de capital
-    fig_eq, ax_eq = plt.subplots(figsize=(8, 4))
-    ax_eq.plot(equity.index, equity, color='blue', label='Capital')
-    ax_eq.set_title(f"Courbe de capital – {ticker}")
-    ax_eq.grid(True)
-    ax_eq.legend()
-    st.pyplot(fig_eq)
+    with col2:
+        fig_eq, ax_eq = plt.subplots(figsize=(8, 4))
+        ax_eq.plot(equity.index, equity, color='blue', label='Capital')
+        ax_eq.set_title(f"Courbe de capital – {ticker}")
+        ax_eq.grid(True)
+        ax_eq.legend()
+        st.pyplot(fig_eq)
+
 
 # ========================
 # Fonction pour récupérer les tickers avec TradingView + VWAP
@@ -214,15 +222,19 @@ if st.button("🔍 Lancer le screening"):
             ticker = yf.Ticker(symbol)
             price = ticker.info.get('currentPrice', 0)
             intraday = ticker.history(period='1d', interval='5m')
-            if intraday.empty: continue
+            if intraday.empty:
+                continue
             vwap = (intraday['Close'] * intraday['Volume']).cumsum() / intraday['Volume'].cumsum()
             if price >= vwap.iloc[-1]:
                 results.append({'ticker': symbol})
         except Exception:
             continue
 
-    df_screened = pd.DataFrame(results)
-    st.session_state['df_screened'] = df_screened
+    st.session_state['df_screened'] = pd.DataFrame(results)
+
+# 🔹 Toujours afficher le screening s'il existe déjà
+if 'df_screened' in st.session_state and not st.session_state['df_screened'].empty:
+    df_screened = st.session_state['df_screened']
     st.write(f"**{len(df_screened)} tickers candidats trouvés après filtrage VWAP**")
     st.dataframe(df_screened)
 
@@ -235,21 +247,27 @@ if 'df_screened' in st.session_state and not st.session_state['df_screened'].emp
         start_date = (datetime.today() - timedelta(days=lookback_days)).strftime('%Y-%m-%d')
         end_date = datetime.today().strftime('%Y-%m-%d')
         all_metrics = {}
+        all_trades = {}
 
+        # 🔹 Collecte des métriques et trades pour chaque ticker
         for ticker in df['ticker'].tolist():
-            st.subheader(f"Analyse : {ticker}")
             df_price = get_df5(ticker, start_date, end_date)
             long_entry, long_exit = compute_signals(df_price)
             trades_df = build_trade_log(df_price, long_entry, long_exit, ticker)
             if trades_df.empty:
-                st.write("Aucun trade exécuté.")
                 continue
             equity = equity_curve(df_price, trades_df)
             metrics = compute_metrics(trades_df, equity)
             all_metrics[ticker] = metrics
-            st.write(trades_df)
-            plot_trades_and_equity(df_price, trades_df, equity, ticker)
+            all_trades[ticker] = (df_price, trades_df, equity)
 
+        # 🔹 Afficher le récapitulatif global AVANT les détails
         if all_metrics:
             st.subheader("Récapitulatif global")
             st.dataframe(pd.DataFrame(all_metrics).T)
+
+        # 🔹 Détails par action
+        for ticker, (df_price, trades_df, equity) in all_trades.items():
+            st.subheader(f"Analyse : {ticker}")
+            st.write(trades_df)
+            plot_trades_and_equity(df_price, trades_df, equity, ticker)
