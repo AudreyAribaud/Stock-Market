@@ -15,13 +15,6 @@ import mplfinance as mpf
 st.set_page_config(page_title="Backtest Multi-Titres", layout="wide")
 st.title("Stock Market Screener & Backtest")
 
-# ========================
-# Paramètres utilisateur
-# ========================
-initial_capital = st.sidebar.number_input("Capital initial ($)", 1000, 1_000_000, 10_000, step=1000)
-alloc_pct = st.sidebar.slider("Allocation par trade (%)", 1, 100, 10)
-leverage = st.sidebar.slider("Levier", 1, 5, 1)
-lookback_days = st.sidebar.slider("Nombre de jours d'historique", 1, 30, 15)
 
 # ========================
 # Fonctions techniques
@@ -182,30 +175,54 @@ def plot_trades_and_equity(df, trades_df, equity, ticker):
 
 
 # ========================
-# Fonction pour récupérer les tickers avec TradingView + VWAP
+# Paramètres du screening
+# ========================
+st.sidebar.header("Paramètres du screening")
+
+price_min = st.sidebar.number_input("Prix minimum ($)", min_value=0, value=25)
+price_max = st.sidebar.number_input("Prix maximum ($)", min_value=0, value=250)
+market_cap_min = st.sidebar.number_input("Market Cap minimum ($)", min_value=0, value=1_000_000_000)
+avg_volume_min = st.sidebar.number_input("Volume moyen 30j minimum", min_value=0, value=1_000_000)
+volume_min = st.sidebar.number_input("Volume minimum", min_value=0, value=1_000_000)
+change_min = st.sidebar.number_input("Variation minimum (%)", min_value=0.0, value=0.0)
+relative_volume_min = st.sidebar.number_input("Relative Volume minimum", min_value=0.0, value=1.2)
+# Checkbox pour SMA
+use_sma50 = st.sidebar.checkbox("SMA50 < Close", value=True)
+use_sma100 = st.sidebar.checkbox("SMA100 < Close", value=True)
+use_sma200 = st.sidebar.checkbox("SMA200 < Close", value=True)
+# Checkbox pour VWAP
+use_vwap_filter = st.sidebar.checkbox("VWAP 5m <= price)", value=True)
+
+
+# ========================
+# Fonction de récupération des tickers
 # ========================
 @st.cache_data
-def get_tickers():
-    tickers = (
-        Query()
-        .select('name', 'close', 'volume', 'relative_volume_10d_calc')
-        .where(
-            col('type') == 'stock',
-            col('exchange').isin(['NASDAQ', 'NYSE']),
-            col('close').between(25, 250),
-            col('market_cap_basic') >= 1_000_000_000,
-            col('average_volume_30d_calc') > 1_000_000,
-            col('volume') > 1_000_000,
-            col('change') > 0,
-            col('relative_volume') > 1.2,
-            col('SMA50') < col('close'),
-            col('SMA100') < col('close'),
-            col('SMA200') < col('close'),
-        )
-        .order_by('volume', ascending=False)
-        .limit(3000)
-        .get_scanner_data()
+def get_tickers(
+    price_min, price_max, market_cap_min, avg_volume_min,
+    volume_min, change_min, relative_volume_min,
+    use_sma50, use_sma100, use_sma200
+):
+    query = Query().select('name', 'close', 'volume', 'relative_volume_10d_calc').where(
+        col('type') == 'stock',
+        col('exchange').isin(['NASDAQ', 'NYSE']),
+        col('close').between(price_min, price_max),
+        col('market_cap_basic') >= market_cap_min,
+        col('average_volume_30d_calc') > avg_volume_min,
+        col('volume') > volume_min,
+        col('change') > change_min,
+        col('relative_volume') > relative_volume_min,
     )
+
+    # Conditions SMA activées selon les checkboxes
+    if use_sma50:
+        query = query.where(col('SMA50') < col('close'))
+    if use_sma100:
+        query = query.where(col('SMA100') < col('close'))
+    if use_sma200:
+        query = query.where(col('SMA200') < col('close'))
+
+    tickers = query.order_by('volume', ascending=False).limit(100).get_scanner_data()
     df = tickers[1]
     return df['name'].tolist()
 
@@ -214,7 +231,11 @@ def get_tickers():
 # ========================
 if st.button("🔍 Lancer le screening"):
     st.info("Screening en cours...")
-    tickers_list = get_tickers()
+    tickers_list = get_tickers(
+        price_min, price_max, market_cap_min, avg_volume_min,
+        volume_min, change_min, relative_volume_min,
+        use_sma50, use_sma100, use_sma200
+    )
     results = []
 
     for symbol in tickers_list:
@@ -225,7 +246,11 @@ if st.button("🔍 Lancer le screening"):
             if intraday.empty:
                 continue
             vwap = (intraday['Close'] * intraday['Volume']).cumsum() / intraday['Volume'].cumsum()
-            if price >= vwap.iloc[-1]:
+           # Filtre VWAP activé ou désactivé
+            if use_vwap_filter:
+                if price >= vwap.iloc[-1]:
+                    results.append({'ticker': symbol})
+            else:
                 results.append({'ticker': symbol})
         except Exception:
             continue
@@ -235,8 +260,21 @@ if st.button("🔍 Lancer le screening"):
 # 🔹 Toujours afficher le screening s'il existe déjà
 if 'df_screened' in st.session_state and not st.session_state['df_screened'].empty:
     df_screened = st.session_state['df_screened']
-    st.write(f"**{len(df_screened)} tickers candidats trouvés après filtrage VWAP**")
+    st.write(f"**{len(df_screened)} tickers candidats trouvés après screening**")
     st.dataframe(df_screened)
+
+
+# ========================
+# Paramètres Backtest
+# ========================
+st.sidebar.header("Paramètres du compte du Backtest")
+initial_capital = st.sidebar.number_input("Capital initial ($)", 1000, 1_000_000, 10_000, step=1000)
+alloc_pct = st.sidebar.slider("Allocation par trade (%)", 1, 100, 10)
+leverage = st.sidebar.slider("Levier", 1, 5, 1)
+lookback_days = st.sidebar.slider("Nombre de jours d'historique", 1, 30, 15)
+
+st.sidebar.header("Paramètres de la stratégie")
+
 
 # ========================
 # Backtest multi-titres
