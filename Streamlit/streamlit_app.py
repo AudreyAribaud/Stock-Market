@@ -13,8 +13,7 @@ import mplfinance as mpf
 # Config Streamlit
 # ========================
 st.set_page_config(page_title="Backtest Multi-Titres", layout="wide")
-st.title("Stock Market Screener & Backtest")
-
+st.title("🚀 Stock Market Screener & Backtest")
 
 # ========================
 # Fonctions techniques
@@ -44,37 +43,108 @@ def atr(df, period=14):
     ranges = pd.concat([high_low, high_close, low_close], axis=1)
     return ranges.max(axis=1).rolling(period, min_periods=period).mean()
 
-def detect_keybars(df):
-    atr20 = atr(df, 20)
-    vol_ma20 = df["volume"].rolling(20).mean()
+def detect_keybars(df, atr_length, atr_mult, vol_avg_length, min_body_pct):
+    atr_val = atr(df, atr_length)
+    vol_ma = df["volume"].rolling(vol_avg_length).mean()
     range_candle = df["high"] - df["low"]
-    return (range_candle > 1.5 * atr20) & (df["volume"] > 1.5 * vol_ma20)
+    body_size = (df["close"] - df["open"]).abs()
+    body_pct = body_size / range_candle * 100
+    return (
+        (range_candle > atr_mult * atr_val) &
+        (df["volume"] > 1.5 * vol_ma) &
+        (body_pct > min_body_pct)
+    )
 
-def compute_signals(df):
-    ema100 = ema(df["close"], 100)
-    keybar = detect_keybars(df)
-    rrs_ok = df["close"] > df["low"].rolling(20).min()
-    long_entry = keybar & (df["close"] > ema100) & rrs_ok
-    long_exit = (df["close"] < ema100) | (df["close"] < df["low"].shift())
+def compute_rrs(df, price_change_length, atr_length):
+    # Exemple simple : prix > plus bas sur price_change_length ET ATR > moyenne ATR_length
+    rrs_price = df["close"] > df["low"].rolling(price_change_length).min()
+    rrs_atr = atr(df, atr_length) > atr(df, atr_length).mean()
+    return rrs_price & rrs_atr
+
+def compute_relative_volume(df, n_day_avg, highlight_thres, soft_highlight_thres):
+    avg_vol = df["volume"].rolling(n_day_avg).mean()
+    rvol = df["volume"] / avg_vol
+    return (rvol > highlight_thres) | (rvol > soft_highlight_thres)
+
+def signal_checklist_long(df, checklist_long):
+    filters = []
+    if checklist_long["Aligned relative strength filter"]:
+        filters.append(df["close"] > ema(df["close"], 30))
+    if checklist_long["RRS 30m crossover 0"]:
+        filters.append(df["close"].diff(6) > 0)
+    if checklist_long["Keybar VWAP breakout"]:
+        vwap = (df["close"] * df["volume"]).cumsum() / df["volume"].cumsum()
+        filters.append(df["close"] > vwap)
+    if checklist_long["Red to green strike"]:
+        filters.append(df["close"] > df["open"])
+    if checklist_long["HA Bullish reversal"]:
+        filters.append(df["close"] > df["open"])
+    if checklist_long["Bullish thrust"]:
+        filters.append(df["close"].pct_change() > 0.01)
+    if checklist_long["ATR trailing stop bullish cross"]:
+        filters.append(df["close"] > ema(df["close"], 14))
+    if checklist_long["Breakout of HOD[1]"]:
+        filters.append(df["close"] > df["high"].shift(1))
+    # Combine tous les filtres cochés en logique OR
+    if filters:
+        return np.logical_or.reduce(filters)
+    else:
+        return pd.Series(False, index=df.index)
+    
+def compute_signals(
+    df,
+    keybar_atr_length,
+    keybar_atr_mult,
+    keybar_vol_avg_length,
+    keybar_min_body_pct,
+    rrs_price_change_length,
+    rrs_atr_length,
+    rvol_n_day_avg,
+    rvol_highlight_thres,
+    rvol_soft_highlight_thres,
+    checklist_long,
+    volume_sma_check,
+    volume_sma_length
+):
+    keybar = detect_keybars(df, keybar_atr_length, keybar_atr_mult, keybar_vol_avg_length, keybar_min_body_pct)
+    rrs_ok = compute_rrs(df, rrs_price_change_length, rrs_atr_length)
+    checklist_ok = signal_checklist_long(df, checklist_long)
+    # Volume logic : OR between volume SMA and relative volume
+    vol_sma = df["volume"].rolling(volume_sma_length).mean() if volume_sma_check else pd.Series(0, index=df.index)
+    volume_ok = (df["volume"] > vol_sma)
+    rvol_ok = compute_relative_volume(df, rvol_n_day_avg, rvol_highlight_thres, rvol_soft_highlight_thres)
+    # Combine volume_ok OR rvol_ok
+    volume_final = volume_ok | rvol_ok
+    # Final entry logic: keybar AND rrs_ok AND (volume_ok OR rvol_ok) AND checklist_ok
+    long_entry = keybar & rrs_ok & volume_final & checklist_ok
+    # Bearish reversal: close < open (simplified, adapt if you want Heikin Ashi or other)
+    long_exit = df["close"] < df["open"]
     return long_entry.fillna(False), long_exit.fillna(False)
 
-def build_trade_log(df, long_entry, long_exit, ticker):
+def build_trade_log(
+    df, long_entry, long_exit, ticker,
+    profit_pct, profit_amount,
+    nATRPeriod, nATRMultip,
+    enable_profit_target
+):
     trades = []
     in_pos = False
     entry_time = None
     entry_price = None
     atr_stop = None
-    atr14 = atr(df, 14)
+    atr_custom = atr(df, nATRPeriod)
     for i, ts in enumerate(df.index):
         price = df["close"].iloc[i]
         if not in_pos and long_entry.iloc[i]:
             in_pos = True
             entry_time = ts
             entry_price = price
-            atr_stop = price - 2 * atr14.iloc[i]
+            atr_stop = price - nATRMultip * atr_custom.iloc[i]
         elif in_pos:
-            atr_stop = max(atr_stop, price - 2 * atr14.iloc[i])
-            if long_exit.iloc[i] or price < atr_stop:
+            atr_stop = max(atr_stop, price - nATRMultip * atr_custom.iloc[i])
+            reached_profit_pct = (price / entry_price - 1.0) * 100.0 >= profit_pct if enable_profit_target else False
+            reached_profit_amount = (price - entry_price) >= profit_amount if enable_profit_target else False
+            if long_exit.iloc[i] or price < atr_stop or reached_profit_pct or reached_profit_amount:
                 exit_time = ts
                 exit_price = price
                 pnl_pct = (exit_price / entry_price - 1.0) * 100.0
@@ -84,7 +154,7 @@ def build_trade_log(df, long_entry, long_exit, ticker):
                     "entry_price": entry_price,
                     "exit_time": exit_time,
                     "exit_price": exit_price,
-                    "pnl_pct": pnl_pct,
+                    "pnl_%": pnl_pct,
                     "duration": exit_time - entry_time
                 })
                 in_pos = False
@@ -119,12 +189,17 @@ def compute_metrics(trades_df, equity):
     if trades_df.empty:
         return {"trades": 0, "winrate_%": 0, "avg_win_%": 0,
                 "avg_loss_%": 0, "total_pnl_%": 0, "max_drawdown_%": 0}
-    wins = trades_df["pnl_pct"] > 0
+    wins = trades_df["pnl_%"] > 0
+    alloc_value = initial_capital * (alloc_pct / 100.0) * leverage
+
     return {
         "trades": len(trades_df),
         "winrate_%": round(wins.mean() * 100, 2),
-        "avg_win_%": round(trades_df.loc[wins, "pnl_pct"].mean() if wins.any() else 0, 2),
-        "avg_loss_%": round(trades_df.loc[~wins, "pnl_pct"].mean() if (~wins).any() else 0, 2),
+        "avg_win_$": round(trades_df.loc[wins, "pnl_%"].mean() / 100 * alloc_value if wins.any() else 0, 2),
+        # "avg_win_%": round(trades_df.loc[wins, "pnl_%"].mean() if wins.any() else 0, 2),
+        "avg_loss_$": round(trades_df.loc[~wins, "pnl_%"].mean() / 100 * alloc_value if (~wins).any() else 0, 2),
+        # "avg_loss_%": round(trades_df.loc[~wins, "pnl_%"].mean() if (~wins).any() else 0, 2),
+        "total_pnl_$": round(equity.iloc[-1] - equity.iloc[0], 2),
         "total_pnl_%": round((equity.iloc[-1] / equity.iloc[0] - 1.0) * 100, 2),
         "max_drawdown_%": round((equity / equity.cummax() - 1.0).min() * 100, 2)
     }
@@ -177,21 +252,20 @@ def plot_trades_and_equity(df, trades_df, equity, ticker):
 # ========================
 # Paramètres du screening
 # ========================
-st.sidebar.header("Paramètres du screening")
-
-price_min = st.sidebar.number_input("Prix minimum ($)", min_value=0, value=25)
-price_max = st.sidebar.number_input("Prix maximum ($)", min_value=0, value=250)
-market_cap_min = st.sidebar.number_input("Market Cap minimum ($)", min_value=0, value=1_000_000_000)
-avg_volume_min = st.sidebar.number_input("Volume moyen 30j minimum", min_value=0, value=1_000_000)
-volume_min = st.sidebar.number_input("Volume minimum", min_value=0, value=1_000_000)
-change_min = st.sidebar.number_input("Variation minimum (%)", min_value=0.0, value=0.0)
-relative_volume_min = st.sidebar.number_input("Relative Volume minimum", min_value=0.0, value=1.2)
-# Checkbox pour SMA
-use_sma50 = st.sidebar.checkbox("SMA50 < Close", value=True)
-use_sma100 = st.sidebar.checkbox("SMA100 < Close", value=True)
-use_sma200 = st.sidebar.checkbox("SMA200 < Close", value=True)
-# Checkbox pour VWAP
-use_vwap_filter = st.sidebar.checkbox("VWAP 5m <= price)", value=True)
+with st.sidebar.expander("Paramètres screening", expanded=False):
+    price_min = st.number_input("Prix minimum ($)", min_value=0, value=25)
+    price_max = st.number_input("Prix maximum ($)", min_value=0, value=250)
+    market_cap_min = st.number_input("Market Cap minimum ($)", min_value=0, value=1_000_000_000)
+    avg_volume_min = st.number_input("Volume moyen 30j minimum", min_value=0, value=1_000_000)
+    volume_min = st.number_input("Volume minimum", min_value=0, value=1_000_000)
+    change_min = st.number_input("Variation minimum (%)", min_value=0.0, value=0.0)
+    relative_volume_min = st.number_input("Relative Volume minimum", min_value=0.0, value=1.2)
+    # Checkbox pour SMA
+    use_sma50 = st.checkbox("SMA50 < Close", value=True)
+    use_sma100 = st.checkbox("SMA100 < Close", value=True)
+    use_sma200 = st.checkbox("SMA200 < Close", value=True)
+    # Checkbox pour VWAP
+    use_vwap_filter = st.checkbox("VWAP 5m <= price", value=True)
 
 
 # ========================
@@ -229,7 +303,7 @@ def get_tickers(
 # ========================
 # Screening des actions
 # ========================
-if st.button("🔍 Lancer le screening"):
+if st.button("🔍 Lancer le screening LONG"):
     st.info("Screening en cours...")
     tickers_list = get_tickers(
         price_min, price_max, market_cap_min, avg_volume_min,
@@ -267,31 +341,89 @@ if 'df_screened' in st.session_state and not st.session_state['df_screened'].emp
 # ========================
 # Paramètres Backtest
 # ========================
-st.sidebar.header("Paramètres du compte du Backtest")
-initial_capital = st.sidebar.number_input("Capital initial ($)", 1000, 1_000_000, 10_000, step=1000)
-alloc_pct = st.sidebar.slider("Allocation par trade (%)", 1, 100, 10)
-leverage = st.sidebar.slider("Levier", 1, 5, 1)
-lookback_days = st.sidebar.slider("Nombre de jours d'historique", 1, 30, 15)
+with st.sidebar.expander("Paramètres du compte du Backtest", expanded=False):
+    initial_capital = st.number_input("Capital initial ($)", 1000, 1_000_000, 10_000, step=1000)
+    alloc_pct = st.slider("Allocation par trade (%)", 1, 100, 10)
+    leverage = st.slider("Levier", 1, 5, 1)
+    lookback_days = st.slider("Nombre de jours d'historique", 1, 30, 15)
 
-st.sidebar.header("Paramètres de la stratégie")
+# ========================
+# Paramètres Stratégie
+# ========================
 
+with st.sidebar.expander("Paramètres de la stratégie", expanded=False):
+    st.subheader("Profit Target")
+    enable_profit_target = st.checkbox("Activer le profit target", value=True)
+    profit_pct = st.number_input("Profit cible (%)", min_value=0.1, max_value=100.0, value=1.0, step=0.1)
+    profit_amount = st.number_input("Profit cible ($)", min_value=1, max_value=10000, value=50, step=1)
+   
+    st.subheader("Keybars Inputs")
+    keybar_atr_length = st.number_input("ATR longueur", min_value=1, max_value=1000, value=390, step=1)
+    keybar_atr_mult = st.number_input("ATR multiplicateur", min_value=0.1, max_value=10.0, value=1.0, step=0.1)
+    keybar_vol_avg_length = st.number_input("Volume Average Length", min_value=1, max_value=1000, value=390, step=1)
+    keybar_min_body_pct = st.number_input("Minimum Body size (%)", min_value=0.0, max_value=100.0, value=75.0, step=0.1)
+    volume_sma_check = st.checkbox("Activer le filtre Volume SMA", value=False)
+    volume_sma_length = st.number_input("Volume SMA Length", min_value=1, max_value=1000, value=50, step=1)
+
+    st.subheader("RRS Inputs")
+    rrs_price_change_length = st.number_input("Price change length", min_value=1, max_value=100, value=12, step=1)
+    rrs_atr_length = st.number_input("ATR longueur", min_value=1, max_value=100, value=12, step=1)
+
+    st.subheader("Relative Volume")
+    rvol_n_day_avg = st.number_input("N Day average", min_value=1, max_value=30, value=5, step=1)
+    rvol_highlight_thres = st.number_input("RVol Highlight Thres", min_value=0.1, max_value=10.0, value=1.5, step=0.1)
+    rvol_soft_highlight_thres = st.number_input("RVol Soft Highlight Thres", min_value=0.1, max_value=10.0, value=1.2, step=0.1)
+
+    st.subheader("ATR Trailing Stop Params")
+    nATRPeriod = st.number_input("ATR Trailing Stop Period", min_value=1, max_value=100, value=14, step=1)
+    nATRMultip = st.number_input("ATR Trailing Stop Multiplicateur", min_value=0.1, max_value=10.0, value=2.0, step=0.1)
+
+    st.subheader("Signal Checklist long")
+    checklist_long = {
+        "Aligned relative strength filter": st.checkbox("Aligned relative strength filter", value=True),
+        "RRS 30m crossover 0": st.checkbox("RRS 30m crossover 0", value=True),
+        "Keybar VWAP breakout": st.checkbox("Keybar VWAP breakout", value=True),
+        "Red to green strike": st.checkbox("Red to green strike", value=True),
+        "HA Bullish reversal": st.checkbox("HA Bullish reversal", value=True),
+        "Bullish thrust": st.checkbox("Bullish thrust", value=True),
+        "ATR trailing stop bullish cross": st.checkbox("ATR trailing stop bullish cross", value=True),
+        "Breakout of HOD[1]": st.checkbox("Breakout of HOD[1]", value=True),
+    }
 
 # ========================
 # Backtest multi-titres
 # ========================
 if 'df_screened' in st.session_state and not st.session_state['df_screened'].empty:
-    if st.button("Lancer le backtest"):
+    if st.button("Lancer le backtest LONG"):
         df = st.session_state['df_screened']
         start_date = (datetime.today() - timedelta(days=lookback_days)).strftime('%Y-%m-%d')
         end_date = datetime.today().strftime('%Y-%m-%d')
         all_metrics = {}
         all_trades = {}
 
-        # 🔹 Collecte des métriques et trades pour chaque ticker
         for ticker in df['ticker'].tolist():
             df_price = get_df5(ticker, start_date, end_date)
-            long_entry, long_exit = compute_signals(df_price)
-            trades_df = build_trade_log(df_price, long_entry, long_exit, ticker)
+            long_entry, long_exit = compute_signals(
+                df_price,
+                keybar_atr_length,
+                keybar_atr_mult,
+                keybar_vol_avg_length,
+                keybar_min_body_pct,
+                rrs_price_change_length,
+                rrs_atr_length,
+                rvol_n_day_avg,
+                rvol_highlight_thres,
+                rvol_soft_highlight_thres,
+                checklist_long,
+                volume_sma_check,
+                volume_sma_length
+            )
+            trades_df = build_trade_log(
+                df_price, long_entry, long_exit, ticker,
+                profit_pct, profit_amount,
+                nATRPeriod, nATRMultip,
+                enable_profit_target
+            )
             if trades_df.empty:
                 continue
             equity = equity_curve(df_price, trades_df)
@@ -299,13 +431,13 @@ if 'df_screened' in st.session_state and not st.session_state['df_screened'].emp
             all_metrics[ticker] = metrics
             all_trades[ticker] = (df_price, trades_df, equity)
 
-        # 🔹 Afficher le récapitulatif global AVANT les détails
         if all_metrics:
-            st.subheader("Récapitulatif global")
+            st.subheader("Récapitulatif global positions LONG")
             st.dataframe(pd.DataFrame(all_metrics).T)
 
-        # 🔹 Détails par action
         for ticker, (df_price, trades_df, equity) in all_trades.items():
-            st.subheader(f"Analyse : {ticker}")
-            st.write(trades_df)
-            plot_trades_and_equity(df_price, trades_df, equity, ticker)
+            with st.expander(f"Analyse : {ticker}", expanded=False):
+                st.write(trades_df)
+                plot_trades_and_equity(df_price, trades_df, equity, ticker)
+
+
