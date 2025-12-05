@@ -15,6 +15,56 @@ if ('serviceWorker' in navigator) {
     });
 }
 
+// PWA Install Prompt
+let deferredPrompt;
+const installButton = document.getElementById('installButton');
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    // Prevent the mini-infobar from appearing on mobile
+    e.preventDefault();
+    // Stash the event so it can be triggered later
+    deferredPrompt = e;
+    // Show the install button
+    if (installButton) {
+        installButton.style.display = 'flex';
+    }
+});
+
+// Handle install button click
+if (installButton) {
+    installButton.addEventListener('click', async () => {
+        if (!deferredPrompt) {
+            return;
+        }
+
+        // Show the install prompt
+        deferredPrompt.prompt();
+
+        // Wait for the user to respond to the prompt
+        const { outcome } = await deferredPrompt.userChoice;
+
+        console.log(`User response to the install prompt: ${outcome}`);
+
+        // Clear the deferredPrompt for next time
+        deferredPrompt = null;
+
+        // Hide the install button
+        installButton.style.display = 'none';
+    });
+}
+
+// Listen for app installed event
+window.addEventListener('appinstalled', () => {
+    console.log('PWA was installed');
+    // Hide the install button
+    if (installButton) {
+        installButton.style.display = 'none';
+    }
+    // Show a success toast
+    showToast('Succès', 'Application installée avec succès!', 'success');
+});
+
+
 // ========================
 // State Management
 // ========================
@@ -197,21 +247,51 @@ async function handleScreening() {
 }
 
 async function simulateScreening(params) {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+        console.log("Appel du screener sur le serveur...");
 
-    // Generate mock screening results
-    const mockTickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'AMD', 'NFLX', 'INTC'];
+        // Appel à notre nouveau serveur intelligent
+        // Cela va déclencher l'exécution du script Python generate_data.py
+        const response = await fetch('/api/screener');
 
-    appState.screeningResults = mockTickers
-        .filter(() => Math.random() > 0.3) // Randomly filter some tickers
-        .map(ticker => ({
-            ticker,
-            price: (Math.random() * (params.priceMax - params.priceMin) + params.priceMin).toFixed(2),
-            volume: Math.floor(Math.random() * 10000000 + params.volumeMin),
-            change: (Math.random() * 10 - 2).toFixed(2),
-            relativeVolume: (Math.random() * 2 + 1).toFixed(2)
-        }));
+        if (!response.ok) {
+            throw new Error(`Erreur serveur: ${response.status}`);
+        }
+
+        let results = await response.json();
+
+        if (results.error) {
+            throw new Error(results.error);
+        }
+
+        console.log(`${results.length} résultats reçus du serveur.`);
+
+        // Filtrage côté client pour affiner si besoin
+        appState.screeningResults = results.filter(item => {
+            return item.price >= params.priceMin &&
+                item.price <= params.priceMax &&
+                item.volume >= params.volumeMin &&
+                item.change >= params.changeMin &&
+                item.relativeVolume >= params.relativeVolumeMin;
+        });
+
+    } catch (error) {
+        console.error('Erreur lors du screening:', error);
+        showToast('Erreur', 'Impossible de lancer le screener. Vérifiez que server.py est lancé.', 'error');
+
+        // Fallback sur la simulation uniquement si le serveur ne répond pas
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const mockTickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'AMD', 'NFLX', 'INTC'];
+        appState.screeningResults = mockTickers
+            .filter(() => Math.random() > 0.3)
+            .map(ticker => ({
+                ticker,
+                price: (Math.random() * (params.priceMax - params.priceMin) + params.priceMin).toFixed(2),
+                volume: Math.floor(Math.random() * 10000000 + params.volumeMin),
+                change: (Math.random() * 10 - 2).toFixed(2),
+                relativeVolume: (Math.random() * 2 + 1).toFixed(2)
+            }));
+    }
 }
 
 function displayScreeningResults() {

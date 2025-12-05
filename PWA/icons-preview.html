@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aperçu des icônes PWA - Stock Market Screener</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+            color: #f8fafc;
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #6366f1, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 2.5rem;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #94a3b8;
+            margin-bottom: 3rem;
+        }
+
+        .icons-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .icon-card {
+            background: #1e1e3f;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .icon-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 32px rgba(99, 102, 241, 0.3);
+        }
+
+        .icon-card img {
+            width: 100%;
+            height: auto;
+            border-radius: 0.75rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        .icon-size {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #6366f1;
+            margin-bottom: 0.5rem;
+        }
+
+        .icon-dimensions {
+            font-size: 0.875rem;
+            color: #94a3b8;
+        }
+
+        .preview-section {
+            background: #1e1e3f;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .preview-section h2 {
+            color: #6366f1;
+            margin-bottom: 1.5rem;
+        }
+
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .preview-item {
+            text-align: center;
+        }
+
+        .preview-item h3 {
+            color: #cbd5e1;
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }
+
+        .phone-mockup {
+            background: #000;
+            border-radius: 2rem;
+            padding: 1rem;
+            display: inline-block;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .phone-screen {
+            background: linear-gradient(135deg, #1a1a2e, #0f0f1e);
+            border-radius: 1rem;
+            padding: 2rem;
+            min-height: 400px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .app-icon-large {
+            width: 120px;
+            height: 120px;
+            border-radius: 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 8px 32px rgba(99, 102, 241, 0.5);
+        }
+
+        .app-name {
+            color: #f8fafc;
+            font-weight: 600;
+            font-size: 1.125rem;
+        }
+
+        .desktop-mockup {
+            background: #1a1a2e;
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .desktop-header {
+            background: #0f0f1e;
+            border-radius: 0.25rem;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .desktop-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 0.5rem;
+        }
+
+        .info-section {
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .info-section h3 {
+            color: #6366f1;
+            margin-bottom: 1rem;
+        }
+
+        .info-section ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .info-section li {
+            padding: 0.5rem 0;
+            color: #cbd5e1;
+        }
+
+        .info-section li::before {
+            content: "✓ ";
+            color: #10b981;
+            font-weight: bold;
+            margin-right: 0.5rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🚀 Stock Market Screener PWA</h1>
+        <p class="subtitle">Aperçu des icônes de l'application</p>
+
+        <div class="preview-section">
+            <h2>Aperçu de l'application installée</h2>
+            <div class="preview-grid">
+                <div class="preview-item">
+                    <h3>📱 Sur Mobile</h3>
+                    <div class="phone-mockup">
+                        <div class="phone-screen">
+                            <img src="icons/icon-192x192.png" alt="App Icon" class="app-icon-large">
+                            <div class="app-name">Stock Market Screener</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="preview-item">
+                    <h3>💻 Sur Desktop</h3>
+                    <div class="desktop-mockup">
+                        <div class="desktop-header">
+                            <img src="icons/icon-96x96.png" alt="App Icon" class="desktop-icon">
+                            <div>
+                                <div class="app-name">Stock Market Screener</div>
+                                <div style="color: #94a3b8; font-size: 0.875rem;">localhost:8000</div>
+                            </div>
+                        </div>
+                        <div style="background: #0f0f1e; height: 300px; border-radius: 0.25rem;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="preview-section">
+            <h2>Toutes les tailles d'icônes</h2>
+            <div class="icons-grid">
+                <div class="icon-card">
+                    <img src="icons/icon-72x72.png" alt="Icon 72x72">
+                    <div class="icon-size">72x72</div>
+                    <div class="icon-dimensions">Petite icône</div>
+                </div>
+
+                <div class="icon-card">
+                    <img src="icons/icon-96x96.png" alt="Icon 96x96">
+                    <div class="icon-size">96x96</div>
+                    <div class="icon-dimensions">Raccourcis</div>
+                </div>
+
+                <div class="icon-card">
+                    <img src="icons/icon-128x128.png" alt="Icon 128x128">
+                    <div class="icon-size">128x128</div>
+                    <div class="icon-dimensions">Standard</div>
+                </div>
+
+                <div class="icon-card">
+                    <img src="icons/icon-144x144.png" alt="Icon 144x144">
+                    <div class="icon-size">144x144</div>
+                    <div class="icon-dimensions">Windows</div>
+                </div>
+
+                <div class="icon-card">
+                    <img src="icons/icon-152x152.png" alt="Icon 152x152">
+                    <div class="icon-size">152x152</div>
+                    <div class="icon-dimensions">iOS</div>
+                </div>
+
+                <div class="icon-card">
+                    <img src="icons/icon-192x192.png" alt="Icon 192x192">
+                    <div class="icon-size">192x192</div>
+                    <div class="icon-dimensions">Android</div>
+                </div>
+
+                <div class="icon-card">
+                    <img src="icons/icon-384x384.png" alt="Icon 384x384">
+                    <div class="icon-size">384x384</div>
+                    <div class="icon-dimensions">Haute résolution</div>
+                </div>
+
+                <div class="icon-card">
+                    <img src="icons/icon-512x512.png" alt="Icon 512x512">
+                    <div class="icon-size">512x512</div>
+                    <div class="icon-dimensions">Splash screen</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <h3>📋 Informations sur les icônes</h3>
+            <ul>
+                <li>8 tailles d'icônes générées (72x72 à 512x512)</li>
+                <li>Format PNG avec transparence</li>
+                <li>Design moderne avec gradient indigo/rose</li>
+                <li>Optimisées pour tous les appareils (mobile, tablette, desktop)</li>
+                <li>Compatible avec le manifest.json de la PWA</li>
+                <li>Thème cohérent avec l'application (fusée 🚀 et graphiques boursiers)</li>
+            </ul>
+        </div>
+    </div>
+</body>
+
+</html>
